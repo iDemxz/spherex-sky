@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPHEREx Sky Search</title>
+  <style>
+    body { font: 16px Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 16px; background: #101426; color: white; }
+    input, button { padding: 10px; margin: 4px; }
+    .result { background: #202844; padding: 14px; margin: 12px 0; border-radius: 8px; overflow-wrap: anywhere; }
+    a { color: #9bd1ff; }
+  </style>
+</head>
+<body>
+  <h1>SPHEREx Sky Search</h1>
+  <p>Search the latest available SPHEREx observations around a sky position.</p>
+
+  <label>Right ascension (degrees)
+    <input id="ra" type="number" value="210.8" step="any">
+  </label>
+  <label>Declination (degrees)
+    <input id="dec" type="number" value="54.35" step="any">
+  </label>
+  <button id="search">Search</button>
+
+  <p id="status">Enter coordinates and search.</p>
+  <div id="results"></div>
+
+  <script>
+    const status = document.getElementById("status");
+    const results = document.getElementById("results");
+
+    document.getElementById("search").addEventListener("click", async () => {
+      const ra = Number(document.getElementById("ra").value);
+      const dec = Number(document.getElementById("dec").value);
+
+      if (!Number.isFinite(ra) || !Number.isFinite(dec) || dec < -90 || dec > 90) {
+        status.textContent = "Enter valid coordinates. Declination must be from -90 to 90.";
+        return;
+      }
+
+      status.textContent = "Searching the SPHEREx archive…";
+      results.replaceChildren();
+
+      const url = new URL("https://irsa.ipac.caltech.edu/SIA");
+      url.search = new URLSearchParams({
+        COLLECTION: "spherex_qr3",
+        POS: `CIRCLE ${ra} ${dec} 0.1`,
+        MAXREC: "10",
+        RESPONSEFORMAT: "JSON"
+      });
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Archive returned ${response.status}`);
+        const data = await response.json();
+        const rows = data.data || data;
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+          status.textContent = "No matching observations found for this position.";
+          return;
+        }
+
+        status.textContent = `Found ${rows.length} result(s).`;
+        rows.forEach((row) => {
+          const card = document.createElement("section");
+          card.className = "result";
+          const title = row.obs_id || row.obs_publisher_did || "SPHEREx observation";
+          const details = Object.entries(row)
+            .slice(0, 8)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join("\n");
+
+          const heading = document.createElement("h2");
+          heading.textContent = title;
+          const pre = document.createElement("pre");
+          pre.textContent = details;
+          card.append(heading, pre);
+          results.append(card);
+        });
+      } catch (error) {
+        status.textContent = "Could not load data. Try again, or use the IRSA Data Explorer link below.";
+        console.error(error);
+      }
+    });
+  </script>
+
+  <p><a href="https://irsa.ipac.caltech.edu/applications/spherex/" target="_blank" rel="noopener">Open SPHEREx Data Explorer</a></p>
+  <p>Data source: NASA/IPAC Infrared Science Archive (IRSA).</p>
+</body>
+</html>
